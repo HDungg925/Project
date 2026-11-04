@@ -46,7 +46,7 @@ Slide 6 chỉ là "thực đơn": **không có VM, IP, port**.
 >
 > UC4 và UC6 là kiểm soát: ai được làm gì, và mỗi người được dùng bao nhiêu. Đó là B3.
 >
-> UC5: hỏng một máy, dữ liệu vẫn đọc được; thêm một máy, cụm tự mở rộng. Đó là B1, chống mất dữ liệu, và cũng là B2.
+> UC5: hỏng một máy, dữ liệu vẫn đọc được; thêm một máy, cụm tự mở rộng. Đó là B1, giảm rủi ro mất dữ liệu, và cũng là B2.
 >
 > Như vậy cả ba lợi ích ở slide 3 đều có use case chứng minh, và cả sáu use case đều có demo ở phần sau. Slide tiếp theo sẽ mở chiếc hộp này ra xem bên trong có những phần mềm nào."
 

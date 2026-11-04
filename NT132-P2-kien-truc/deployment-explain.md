@@ -61,7 +61,7 @@
    * **ceph2:** **Samba mất, nên mất SMB**; MDS active chuyển sang bản standby ở ceph1 [dự kiến]. S3 vẫn chạy.
    * Cách khắc phục: RGW thứ hai (D10); Samba clustered (ngoài phạm vi). Bảng đầy đủ: tài liệu nhóm T5.6.
 3. **"Sao ceph4 không có MON?"**
-   4 MON vẫn chỉ chịu mất 1 máy (đa số của 4 là 3), lại thêm một máy phải đồng bộ bản đồ cụm, nên giữ 3 MON. Trước khi thêm ceph4 phải ghim vị trí MON, vì cephadm có thể tự đặt MON lên host mới [?] (gotcha N1).
+   4 MON vẫn chỉ chịu mất 1 máy (đa số của 4 là 3), lại thêm một máy phải đồng bộ bản đồ cụm, nên giữ 3 MON. Trước khi thêm ceph4 phải ghim vị trí MON, vì cephadm mặc định tự thêm MON lên host mới, tối đa 5 [docs] (gotcha N1).
 
 #### **Không được nói**
 

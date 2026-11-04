@@ -1,6 +1,6 @@
 # NT132 · Project 2 (Ceph: block · file · object) · FILE NGỮ CẢNH CHO AI
 
-> **v3.0 · 04/11/2026** (cập nhật theo D15–D20: bỏ TrueNAS, chỉ dùng Ceph cho cả block, file, object; bản trước: v2.1 · 21/10/2026). Dán file này ở đầu mỗi phiên AI mới, kèm một câu:
+> **v3.1 · 04/11/2026** (v3.1: đổi tên B1, sửa mốc MinIO; v3.0 cập nhật theo D15–D20: bỏ TrueNAS, chỉ dùng Ceph cho cả block, file, object; bản trước: v2.1 · 21/10/2026). Dán file này ở đầu mỗi phiên AI mới, kèm một câu:
 > "Người đang chat: <tên>, dùng máy <LAP-24 / LAP-16A / LAP-16B>. Hôm nay cần: …"
 > Chi tiết (đặc tả UC, runbook, kiến trúc, nhật ký): `NT132-P2-TaiLieuNhom.md`. Chỉ dán phần cần cho phiên đó.
 > **Nhãn trạng thái:** CHỐT (nhóm đã quyết) · ĐỀ XUẤT (có phương án, chờ nhóm duyệt) · CHƯA CHỐT (chưa có câu trả lời; không tự điền).
@@ -68,7 +68,7 @@ Chi tiết từng UC: tài liệu nhóm T6. Hạng ưu tiên và giả định v
 | D11 | Phân bổ RAM phương án A (mục 3.2) | ĐỀ XUẤT, chờ đo (tính lại 04/11: 4 VM Ceph, tổng 16 GB, 8 vCPU; bỏ truenas, thêm MDS, Samba, `ceph4`) | Số đang là ước tính thô; phần cộng thêm cho MDS, Samba chưa có nguồn | Có số đo `free -h`, `ceph orch ps` lúc recovery |
 | D12 | ~~Phương án B = 1 VM `ceph-aio`, 3 OSD, EC 2+1 failure-domain osd (RAM 9 GB)~~ | HỦY 04/11 → D20 | Không dựng B; cấu hình B giữ ở mục 3.2, tài liệu nhóm T7.21 để tham khảo | — |
 | D13 | OS cho node Ceph | CHƯA CHỐT (đề xuất Ubuntu Server 22.04 LTS) | Bảng OS của Tentacle liệt kê Ubuntu 22.04, không có 24.04 | Ceph thêm 24.04 vào bảng |
-| D14 | Versioning bucket (bucket của UC3; `nas-backup` không còn), TLS cho RGW, Object Lock | CHƯA CHỐT (đề xuất: versioning Should, TLS Should, Object Lock Could) | Hướng bảo mật; minh họa chống mất dữ liệu | — |
+| D14 | Versioning bucket (bucket của UC3; `nas-backup` không còn), TLS cho RGW, Object Lock | CHƯA CHỐT (đề xuất: versioning Should, TLS Should, Object Lock Could) | Hướng bảo mật; minh họa giảm rủi ro mất dữ liệu | — |
 | D15 | **Bỏ TrueNAS, chỉ dùng Ceph.** Bỏ VM truenas, ZFS, Cloud Sync. Phần file (NAS) do CephFS + module `smb` của Ceph cung cấp | CHỐT 28/10 (thầy); nhóm áp dụng 03/11 | Thầy xác nhận 28/10 (Dũng hỏi riêng): "chỉ cần Ceph thôi, không cần TrueNAS". Lần hỏi 07/10 nhóm hiểu là chỉ thay MinIO. Ceph cung cấp được cả block, file, object | Thầy đổi yêu cầu |
 | D16 | **6 UC:** UC1 file (SMB trên CephFS, không có phần file↔object) · UC2 block (RBD, mức ngắn) · UC3 object · UC4 IAM · UC5 EC + node chết + thêm node · UC6 Thresholds & Limits | CHỐT 03/11 | Góp ý demo của thầy 28/10 (block / file / object, thêm / xóa node); giữ đủ 5 UC của đề gốc, thêm UC2 block | Thầy góp ý lại; tổng số slide vượt thời lượng (Q9) |
 | D17 | Định nghĩa "storage gateway" mới: (a) RGW, (b) Samba của module `smb`; RBD không qua gateway (mục 1) | ĐỀ XUẤT (thay D6) | Cloud Sync đã bỏ; RGW và Samba đều dịch giao thức client sang RADOS | Nhóm duyệt |
@@ -314,7 +314,7 @@ Tiền tố mã: F = file (CephFS, MDS, SMB) · S = S3 client · R = RGW · E = 
 | IAM Accounts có từ Squid 19.2.0; account ID = "RGW" + 17 chữ số; user của account bắt đầu không có quyền nào | docs.ceph.com/en/squid/radosgw/account | 20/10/2026 |
 | boto3 từ 1.36 bật checksum mặc định; RGW có thể lỗi; cách tránh: `when_required` | specs.openstack.org (glance, 2026.1) | 19/10/2026 |
 | Rate limit RGW tính theo từng instance; vượt ngưỡng trả HTTP 503 | ceph.io blog (2025) rgw-rate-limiting | 19/10/2026 |
-| MinIO gỡ gateway từ `RELEASE.2022-10-29T06-21-33Z`; bản cộng đồng chuyển maintenance 12/2025, archive 02/2026 | min.io blog; vonng.com; itsfoss.com | 13/10/2026 (phiên trước, chưa kiểm lại) |
+| MinIO gỡ gateway từ `RELEASE.2022-10-29T06-21-33Z`; bản cộng đồng chuyển maintenance 12/2025; README kho `minio/minio` ghi "no longer maintained" (đổi khoảng 02/2026); kho archive 25/04/2026 (sửa 04/11, bản cũ ghi 02/2026) | min.io blog; vonng.com; itsfoss.com; README trên GitHub (đọc 04/11); ngày archive: banner GitHub qua nguồn trích lại (pinggy.io, devtake.pages.dev), chưa tự xem [?] | 04/11/2026 |
 | AWS từ 16/09/2026: "phần lớn khách mới không cần thẻ", 100 USD credit, triển khai dần | aws.amazon.com blog (getting-started) | 19/10/2026 |
 
 ---

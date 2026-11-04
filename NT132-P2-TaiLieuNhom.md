@@ -1,6 +1,6 @@
 # NT132 · Project 2 (Ceph: block · file · object) · TÀI LIỆU NHÓM
 
-> **v3.0 · 04/11/2026** (cập nhật theo D15–D20: bỏ TrueNAS, chỉ dùng Ceph cho cả block, file, object; bản trước: v2.1 · 21/10/2026, thêm 5 sơ đồ kiến trúc vào T5). Tài liệu đầy đủ của nhóm. File ngắn để dán vào AI: `NT132-P2-AI.md`.
+> **v3.1 · 04/11/2026** (v3.1: đổi tên B1, sửa mốc MinIO; v3.0 cập nhật theo D15–D20: bỏ TrueNAS, chỉ dùng Ceph cho cả block, file, object; bản trước: v2.1 · 21/10/2026, thêm 5 sơ đồ kiến trúc vào T5). Tài liệu đầy đủ của nhóm. File ngắn để dán vào AI: `NT132-P2-AI.md`.
 > File này viết lại từ "file ngữ cảnh v1.1" (18/10). Nó **chưa** được đối chiếu với `project2-ceph-nt132.md`; khi gộp, giữ một bản duy nhất cho mỗi nội dung.
 
 ---
@@ -59,7 +59,7 @@
 
 | # | Pain point | Bằng chứng đã có | Cần bổ sung |
 |---|---|---|---|
-| PP1 | Giải pháp gateway/S3 mã nguồn mở quen thuộc không còn dùng an toàn được: MinIO đã gỡ gateway (2022) và bản cộng đồng ngừng bảo trì. Dùng S3 của cloud công cộng thì phụ thuộc Internet và tốn phí. | MinIO blog (deprecation of the MinIO gateway); MinIO docs (migrate-fs-gateway); vonng.com, itsfoss.com (bản cộng đồng). Xem T13. | Tìm nguồn chính thức cho mốc 12/2025 và 02/2026 (hiện chỉ có nguồn thứ cấp). |
+| PP1 | Giải pháp gateway/S3 mã nguồn mở quen thuộc không còn dùng an toàn được: MinIO đã gỡ gateway (2022) và bản cộng đồng ngừng bảo trì. Dùng S3 của cloud công cộng thì phụ thuộc Internet và tốn phí. | MinIO blog (deprecation of the MinIO gateway); MinIO docs (migrate-fs-gateway); README chính thức của kho `minio/minio`: "THIS REPOSITORY IS NO LONGER MAINTAINED" (đọc 04/11); vonng.com, itsfoss.com (các mốc trước đó). Xem T13.1. | Tự mở github.com/minio/minio xác nhận banner "archived by the owner on Apr 25, 2026" (hiện chỉ thấy qua nguồn trích lại). |
 | PP2 | **(viết lại 04/11)** Mỗi kiểu dữ liệu nằm ở một kho riêng (NAS cho file, ổ riêng cho máy chủ, kho S3 cho ứng dụng): mỗi kho phải quản trị, sao lưu, mở rộng riêng. NAS truyền thống mở rộng kiểu scale-up (thêm ổ vào cùng một máy) nên chạm giới hạn của máy đó; máy chứa NAS hỏng là mất truy cập toàn bộ dữ liệu file. | Chưa có. | **[CẦN NGUỒN]**: tài liệu định nghĩa unified storage, scale-up và scale-out (ví dụ tài liệu kiến trúc của Ceph, hoặc thuật ngữ của SNIA); báo cáo về mất dữ liệu do hỏng thiết bị. Không tự đặt số liệu. |
 | PP3 | Kho dùng chung cho nhiều người và ứng dụng: dễ cấp quyền quá rộng; một client có thể chiếm hết dung lượng hoặc băng thông; muốn chịu lỗi bằng 3 bản sao thì tốn gấp 3 dung lượng. | "3 bản sao → dùng được 1/3 dung lượng" là phép tính, không cần nguồn. | **[CẦN NGUỒN]**: nguyên tắc least privilege (ví dụ tài liệu IAM của AWS hoặc một chuẩn bảo mật). |
 
@@ -77,7 +77,7 @@
 
 | # | Benefit | Chứng minh bằng | Khi demo nhìn thấy gì | Không được nói (tránh "chém gió") |
 |---|---|---|---|---|
-| B1 | **Chống mất dữ liệu (data loss prevention).** Dữ liệu được chia mảnh trên nhiều máy; mất 1 node vẫn đọc/ghi được và tự phục hồi khi node quay lại; tốn ít dung lượng hơn 3 bản sao. | UC5 | `ceph -s` báo degraded nhưng md5 của file tải về vẫn khớp; bật lại node → HEALTH_OK. `ceph df` cho thấy USED/STORED của pool EC (lý thuyết 1.5×; replica 3 là 3×) — số thật đo khi chạy. | Không nói "không bao giờ mất dữ liệu": cả cụm nằm trên 1 laptop, và EC 2+1 mất 2 node là mất dữ liệu. |
+| B1 | **Giảm rủi ro mất dữ liệu** (đổi tên 04/11, xem T12.1). Dữ liệu được chia mảnh trên nhiều máy; mất 1 node vẫn đọc/ghi được và tự phục hồi khi node quay lại; tốn ít dung lượng hơn 3 bản sao. | UC5 | `ceph -s` báo degraded nhưng md5 của file tải về vẫn khớp; bật lại node → HEALTH_OK. `ceph df` cho thấy USED/STORED của pool EC (lý thuyết 1.5×; replica 3 là 3×) — số thật đo khi chạy. | Không nói "không bao giờ mất dữ liệu": cả cụm nằm trên 1 laptop, và EC 2+1 mất 2 node là mất dữ liệu. |
 | B2 | **Một nền tảng mở cho mọi kiểu dữ liệu, lớn dần theo nhu cầu.** Cùng một cụm phục vụ thư mục chia sẻ (SMB), ổ đĩa (RBD) và S3 cho nhiều công cụ có sẵn (aws cli, rclone, boto3), không cần cloud trả phí; thêm máy là thêm dung lượng mà không dừng dịch vụ. | UC1, UC2, UC3, UC5 (phần thêm node) | Cùng một cụm, ba cách truy cập: file qua `smbclient`, ổ `/dev/rbd0` trên Kali, bucket qua aws cli và rclone. Thêm ceph4: `ceph osd df` thấy dữ liệu dàn sang OSD mới, `ceph df` thấy tổng dung lượng tăng. | Không nói "tương thích 100% với AWS S3" hay "mở rộng vô hạn"; chỉ nói về những gì đã demo. Không nói "thay được NAS thương mại về mọi mặt": module `smb` của Tentacle còn đang phát triển (F1). |
 | B3 | **Kiểm soát truy cập và tài nguyên.** Mỗi người hoặc ứng dụng chỉ làm đúng việc được cấp; không ai chiếm hết dung lượng hay làm quá tải dịch vụ. | UC4, UC6 | 403 AccessDenied khi user chỉ-đọc ghi dữ liệu; ghi bị từ chối khi vượt quota (mã lỗi: kiểm khi chạy); 503 khi vượt rate limit. | Không nói "chống được DoS": rate limit chỉ giới hạn theo user/bucket, trên từng RGW. |
 
@@ -321,7 +321,7 @@ flowchart LR
 
     %% ===== Tác nhân bên phải và chú thích =====
     ACT_ADM["Quản trị viên lưu trữ"]
-    LEG["CHÚ THÍCH<br/>B1 Chống mất dữ liệu<br/>B2 Một nền tảng mở, lớn dần<br/>B3 Kiểm soát truy cập, tài nguyên<br/>──────────<br/>Ô bo tròn = use case<br/>Ô xanh lá = tác nhân bên ngoài<br/>Đường nối = tác nhân dùng UC<br/>Mọi UC do một cụm Ceph phục vụ"]
+    LEG["CHÚ THÍCH<br/>B1 Giảm rủi ro mất dữ liệu<br/>B2 Một nền tảng mở, lớn dần<br/>B3 Kiểm soát truy cập, tài nguyên<br/>──────────<br/>Ô bo tròn = use case<br/>Ô xanh lá = tác nhân bên ngoài<br/>Đường nối = tác nhân dùng UC<br/>Mọi UC do một cụm Ceph phục vụ"]
 
     %% ===== Liên kết tác nhân - use case (đường thẳng, không mũi tên) =====
     ACT_OFF --- UC1
@@ -1819,6 +1819,8 @@ Kinh nghiệm: chưa ai dùng Ceph, S3, Samba. Ai cũng phải giải thích đ�
 | 04/11/2026 | 3 pool chứa dữ liệu dùng số PG cố định, tắt autoscaler (sửa E8) | Autoscaler của Tentacle bắt đầu pool mới với 1 PG |
 | 04/11/2026 | Lộ trình giả định báo cáo khoảng 16/11; Phan Hoàng Dũng nhận TV1 | Q1 chưa có ngày thật; Q7 |
 | 04/11/2026 | Không dựng phương án B; thử module `smb` ngay trên cụm A | D20; D12 HỦY |
+| 04/11/2026 | Đổi tên B1 thành "Giảm rủi ro mất dữ liệu" (T1.5, sơ đồ Business) | "Chống mất dữ liệu" là nói quá (cả cụm nằm trên 1 laptop); chữ "data loss prevention" dễ nhầm với DLP, thuật ngữ ATTT chỉ việc chống rò rỉ dữ liệu ra ngoài |
+| 04/11/2026 | Sửa mốc MinIO: README ghi "no longer maintained", kho archive 25/04/2026 (bản cũ ghi 12/02/2026) | Bản nội dung slide v2 phát hiện; kiểm lại 04/11 (T13.1) |
 
 ### T12.2 Nhật ký tiến độ
 
@@ -1843,7 +1845,7 @@ Kinh nghiệm: chưa ai dùng Ceph, S3, Samba. Ai cũng phải giải thích đ�
 ### T13.1 Dòng thời gian MinIO và AWS (dùng cho PP1 và D2)
 
 - **MinIO gateway:** đóng băng 07/2020; công bố ngừng hỗ trợ 02/2022; gỡ hẳn từ `RELEASE.2022-10-29T06-21-33Z`. Lý do: proxy không trạng thái nên không hỗ trợ được versioning, replication, object lock, mã hóa, nén. (min.io blog; MinIO docs migrate-fs-gateway)
-- **MinIO bản cộng đồng:** 05/2025 gỡ phần lớn chức năng quản trị trên console (kể cả LDAP/OIDC); 10/2025 ngừng phát hành binary/Docker image; 03/12/2025 chuyển sang maintenance mode; 12/02/2026 đánh dấu không còn bảo trì và archive. (vonng.com; itsfoss.com — nguồn thứ cấp, kiểm ngày 13/10/2026, cần nguồn chính thức)
+- **MinIO bản cộng đồng:** 05/2025 gỡ phần lớn chức năng quản trị trên console (kể cả LDAP/OIDC); 10/2025 ngừng phát hành binary/Docker image; 03/12/2025 chuyển sang maintenance mode (vonng.com; itsfoss.com — nguồn thứ cấp, kiểm 13/10/2026). README của kho `minio/minio` ghi "THIS REPOSITORY IS NO LONGER MAINTAINED" (nguồn chính thức, đọc 04/11/2026; README đổi khoảng 12/02/2026 theo nguồn thứ cấp). Kho bị archive ngày **25/04/2026** theo banner GitHub "archived by the owner on Apr 25, 2026" (sửa 04/11: bản cũ ghi archive 12/02/2026; banner chỉ đọc được qua nguồn trích lại như pinggy.io, devtake.pages.dev vì github.com bị chặn trong phiên AI → nhóm tự mở trang để xác nhận).
 - **AWS:** từ 07/2025 tài khoản mới chọn gói Free hoặc Paid, có credit 100–200 USD; gói Free hết sau 6 tháng hoặc khi hết credit; đăng ký kiểu truyền thống bắt buộc có thẻ (kiểm 13/10/2026). Từ 16/09/2026 AWS triển khai dần cách đăng ký mới: "For most new customers, no credit card is required", có 100 USD credit (kiểm 19/10/2026).
 
 ### T13.2 Tài liệu
@@ -1867,6 +1869,7 @@ Kinh nghiệm: chưa ai dùng Ceph, S3, Samba. Ai cũng phải giải thích đ�
 - OpenStack spec (boto3 checksum): https://specs.openstack.org/openstack/glance-specs/specs/2026.1/approved/glance_store/s3-boto3-checksum-improvements.html
 - AWS SDK data integrity: https://docs.aws.amazon.com/sdkref/latest/guide/feature-dataintegrity.html
 - rclone serve s3: https://rclone.org/commands/rclone_serve_s3
+- MinIO GitHub repository (README "no longer maintained"; banner archived 25/04/2026): https://github.com/minio/minio
 - MinIO gateway deprecation: https://www.min.io/blog/deprecation-of-the-minio-gateway
 - MinIO migrate from gateway: https://min.io/docs/minio/linux/operations/install-deploy-manage/migrate-fs-gateway.html
 - MinIO Thresholds and Limits: https://min.io/docs/minio/linux/operations/concepts/thresholds.html

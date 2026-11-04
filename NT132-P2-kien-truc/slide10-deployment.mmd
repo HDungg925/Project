@@ -1,11 +1,16 @@
 ---
 title: "Deployment Architecture · Phần mềm nào chạy trên máy nào"
+config:
+  layout: dagre
+  theme: base
+  themeVariables: {"fontSize": "32px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F", "edgeLabelBackground": "#FFFFFF"}
+  themeCSS: ".flowchartTitleText { font-size: 42px; font-weight: bold; } .edgeLabel div { max-width: none !important; white-space: nowrap !important; }"
+  flowchart: {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 20, "rankSpacing": 40, "padding": 10, "subGraphTitleMargin": {"top": 6, "bottom": 26}}
 ---
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "32px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F", "edgeLabelBackground": "#FFFFFF"}, "themeCSS": ".flowchartTitleText { font-size: 42px; font-weight: bold; } .edgeLabel div { max-width: none !important; white-space: nowrap !important; }", "flowchart": {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 20, "rankSpacing": 40, "padding": 10, "subGraphTitleMargin": {"top": 6, "bottom": 26}}}}%%
 flowchart TB
-    %% ===== BẢNG MÀU CHUNG (giữ nguyên như slide 6-9) =====
+    %% ===== BẢNG MÀU CHUNG v3 (giữ nguyên như slide 6-9) =====
     classDef client  fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B1B1B
-    classDef truenas fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
+    classDef gateway fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
     classDef ceph    fill:#DCEBFA,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
     classDef infra   fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1B1B1B
     classDef should  fill:#F5F5F5,stroke:#616161,stroke-width:2px,stroke-dasharray:6 4,color:#424242
@@ -13,17 +18,17 @@ flowchart TB
 
     %% ===== HOST KALI =====
     subgraph H_KALI["Host Kali"]
-        K_CLI["aws cli · rclone · boto3/curl<br/>smbclient · trình duyệt"]
+        K_CLI["aws cli · rclone · boto3/curl<br/>smbclient · rbd (krbd) · trình duyệt"]
         K_DATA[("/data: file qcow2<br/>= ổ đĩa ảo của VM")]
     end
 
-    %% ===== CÁC VM =====
-    %% Khai báo truenas SAU 3 node Ceph là CỐ Ý: như vậy cả v11 và v12 đều xếp truenas bên trái
+    %% ===== 4 NODE CEPH =====
     subgraph V_C1["ceph1"]
         direction TB
         C1_MON("MON")
         C1_MGR("MGR active<br/>+ dashboard :8443")
         C1_RGW("RGW :80")
+        C1_MDS("MDS standby")
         C1_OSD("OSD.0 · đĩa 15 GB")
         C1_CLI["ceph CLI · radosgw-admin<br/>(cephadm shell)"]
     end
@@ -31,7 +36,9 @@ flowchart TB
     subgraph V_C2["ceph2"]
         direction TB
         C2_MON("MON")
-        C2_MGR("MGR standby<br/>(cần ghim vị trí)")
+        C2_MGR("MGR standby")
+        C2_SMB("Samba :445<br/>(module smb)")
+        C2_MDS("MDS active")
         C2_RGW("RGW :80<br/>nếu chốt D10")
         C2_OSD("OSD.1 · đĩa 15 GB")
     end
@@ -42,45 +49,43 @@ flowchart TB
         C3_OSD("OSD.2 · đĩa 15 GB")
     end
 
-    subgraph V_TN["truenas"]
+    subgraph V_C4["ceph4 · thêm ở UC5"]
         direction TB
-        T_UI["Web UI"]
-        T_SMB["Samba"]
-        T_CS["Cloud Sync (rclone)"]
-        T_ZFS["ZFS pool mirror"]
+        C4_OSD("OSD.3 · đĩa 15 GB")
     end
 
-    POOL[("Pool EC 2+1 cho data RGW<br/>pool khác: replicated ×3")]
+    POOL[("Pool EC 2+1: data của RGW<br/>pool khác (RGW, CephFS, rbd): replicated ×3")]
 
-    LEG["CHÚ THÍCH<br/>Khung = một máy<br/>Ô bo góc = daemon Ceph (container)<br/>Ô vuông cam = dịch vụ TrueNAS<br/>Ô xanh lá = công cụ client<br/>Hình trụ = nơi chứa dữ liệu<br/>Nét đứt xám = CHƯA CHỐT"]
+    LEG["CHÚ THÍCH<br/>Khung = một máy<br/>Ô bo góc = daemon (container)<br/>Cam = gateway · Xanh = lõi Ceph<br/>Ô xanh lá = công cụ client<br/>Hình trụ = nơi chứa dữ liệu<br/>Nét đứt xám = CHƯA CHỐT<br/>Khung viền đứt = node thêm ở UC5"]
     EXTRA["Container: podman, do cephadm quản lý<br/>Daemon phụ cephadm tự thêm (ví dụ<br/>crash): [kiểm bằng ceph orch ps]"]
 
-    %% ===== ĐƯỜNG NỐI THẬT (link 0-6) =====
+    %% ===== ĐƯỜNG NỐI THẬT (link 0-7) =====
     %% Nối vào KHUNG máy (V_...), không nối vào ô bên trong: nối vào ô bên trong làm v11 kéo giãn cột
-    K_DATA -->|"3 file"| V_TN
     K_DATA -->|"2 file"| V_C1
     K_DATA -->|"2 file"| V_C2
     K_DATA -->|"2 file"| V_C3
+    K_DATA -->|"2 file"| V_C4
     V_C1 --- POOL
     V_C2 --- POOL
     V_C3 --- POOL
+    V_C4 --- POOL
 
-    %% ===== LIÊN KẾT ẨN: xếp daemon thành cột dọc trong từng máy (link 7+) =====
-    T_UI ~~~ T_SMB ~~~ T_CS ~~~ T_ZFS
-    C1_MON ~~~ C1_MGR ~~~ C1_RGW ~~~ C1_OSD ~~~ C1_CLI
-    C2_MON ~~~ C2_MGR ~~~ C2_RGW ~~~ C2_OSD
+    %% ===== LIÊN KẾT ẨN: xếp daemon thành cột dọc trong từng máy (link 8+) =====
+    C1_MON ~~~ C1_MGR ~~~ C1_RGW ~~~ C1_MDS ~~~ C1_OSD ~~~ C1_CLI
+    C2_MON ~~~ C2_MGR ~~~ C2_SMB ~~~ C2_MDS ~~~ C2_RGW ~~~ C2_OSD
     C3_MON ~~~ C3_OSD
 
     linkStyle 0,1,2,3,4,5,6 stroke:#37474F,stroke-width:2px
+    linkStyle 7 stroke:#37474F,stroke-width:2px,stroke-dasharray:6 4
 
     class K_CLI,C1_CLI client
     class K_DATA infra
-    class T_UI,T_SMB,T_CS,T_ZFS truenas
-    class C1_MON,C1_MGR,C1_RGW,C1_OSD,C2_MON,C2_MGR,C2_OSD,C3_MON,C3_OSD,POOL ceph
+    class C1_RGW,C2_SMB gateway
+    class C1_MON,C1_MGR,C1_MDS,C1_OSD,C2_MON,C2_MGR,C2_MDS,C2_OSD,C3_MON,C3_OSD,C4_OSD,POOL ceph
     class C2_RGW should
     class LEG,EXTRA note
     style H_KALI fill:#FAFAFA,stroke:#4527A0,stroke-width:2px,color:#1B1B1B
-    style V_TN fill:#FFF8F0,stroke:#E65100,stroke-width:2px,color:#1B1B1B
     style V_C1 fill:#F4F8FD,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
     style V_C2 fill:#F4F8FD,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
     style V_C3 fill:#F4F8FD,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
+    style V_C4 fill:#F4F8FD,stroke:#1565C0,stroke-width:2px,stroke-dasharray:6 4,color:#1B1B1B

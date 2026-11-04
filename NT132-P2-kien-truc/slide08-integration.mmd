@@ -1,11 +1,16 @@
 ---
 title: "Integration Architecture · Request và dữ liệu đi qua các thành phần thế nào"
+config:
+  layout: dagre
+  theme: base
+  themeVariables: {"fontSize": "32px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F", "edgeLabelBackground": "#FFFFFF"}
+  themeCSS: ".flowchartTitleText { font-size: 42px; font-weight: bold; } .edgeLabel div { max-width: none !important; white-space: nowrap !important; }"
+  flowchart: {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 20, "rankSpacing": 50, "padding": 10, "subGraphTitleMargin": {"top": 6, "bottom": 26}}
 ---
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "32px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F", "edgeLabelBackground": "#FFFFFF"}, "themeCSS": ".flowchartTitleText { font-size: 42px; font-weight: bold; } .edgeLabel div { max-width: none !important; white-space: nowrap !important; }", "flowchart": {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 20, "rankSpacing": 50, "padding": 10, "subGraphTitleMargin": {"top": 6, "bottom": 26}}}}%%
 flowchart TB
-    %% ===== BẢNG MÀU CHUNG (giữ nguyên như slide 6-7) =====
+    %% ===== BẢNG MÀU CHUNG v3 (giữ nguyên như slide 6-7) =====
     classDef client  fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B1B1B
-    classDef truenas fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
+    classDef gateway fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
     classDef ceph    fill:#DCEBFA,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
     classDef infra   fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1B1B1B
     classDef should  fill:#F5F5F5,stroke:#616161,stroke-width:2px,stroke-dasharray:6 4,color:#424242
@@ -13,8 +18,8 @@ flowchart TB
 
     %% Khai báo Luồng 3 → 2 → 1 là CỐ Ý: Mermaid xếp các khung rời nhau theo thứ tự ngược,
     %% nên trên hình sẽ hiện Luồng 1 → 2 → 3 từ trái sang phải.
-    %% ===== LUỒNG 3: UC4 đọc khi thiếu 1 node =====
-    subgraph L3["Luồng 3 · UC4: đọc khi ceph3 tắt"]
+    %% ===== LUỒNG 3: UC5 đọc khi thiếu 1 node =====
+    subgraph L3["Luồng 3 · UC5: đọc khi ceph3 tắt"]
         direction TB
         C1["aws cli GET<br/>test200.bin"]
         C2["RGW"]
@@ -24,8 +29,8 @@ flowchart TB
         C6["Client nhận file<br/>md5 khớp"]
     end
 
-    %% ===== LUỒNG 2: UC3 xác thực rồi phân quyền =====
-    subgraph L2["Luồng 2 · UC3: xác thực → phân quyền"]
+    %% ===== LUỒNG 2: UC4 xác thực rồi phân quyền =====
+    subgraph L2["Luồng 2 · UC4: xác thực → phân quyền"]
         direction TB
         B1["Request S3<br/>ví dụ alice-ro PUT"]
         B2["RGW · xác thực<br/>tính lại chữ ký SigV4"]
@@ -35,51 +40,47 @@ flowchart TB
         B6["Được phép<br/>đọc/ghi RADOS"]
     end
 
-    %% ===== LUỒNG 1: UC1 PUSH, file thành object =====
-    subgraph L1["Luồng 1 · UC1: file → object (ghi)"]
+    %% ===== LUỒNG 1: UC1 ghi file qua SMB =====
+    subgraph L1["Luồng 1 · UC1: ghi file qua SMB"]
         direction TB
-        A1["smbclient"]
-        A2["Samba → ZFS<br/>file vào outbox/"]
-        A3{{"… chờ: Run Now<br/>hoặc theo lịch …"}}
-        A4["Cloud Sync (rclone)<br/>đọc outbox/"]
-        A5["RGW<br/>kiểm như Luồng 2"]
-        A6["Pool index<br/>replicated ×3 (omap)"]
-        A7["OSD chính của PG<br/>chia 2 data + 1 parity"]
-        A8["2 OSD còn lại<br/>mỗi OSD giữ 1 mảnh"]
+        A1["smbclient<br/>put baocao.pdf"]
+        A2["Samba (ceph2)<br/>gateway SMB → CephFS"]
+        A3["MDS active<br/>tạo mục: tên, quyền"]
+        A4["Pool metadata<br/>replicated ×3"]
+        A5["OSD chính của PG<br/>(pool data CephFS)"]
+        A6["2 OSD còn lại<br/>giữ 2 bản sao"]
     end
 
     %% Chú thích để rời, không nối: nối vào một luồng làm v11 kéo giãn luồng đó
-    LEG["CHÚ THÍCH<br/>Đọc từ trên xuống<br/>Mũi tên: request, dữ liệu<br/>Đầu ✕: không dùng được<br/>Ô trắng: kết quả,<br/>khoảng chờ, node tắt"]
+    LEG["CHÚ THÍCH<br/>Đọc từ trên xuống<br/>Mũi tên: request, dữ liệu<br/>Số 1, 2: thứ tự bước<br/>Đầu ✕: không dùng được<br/>Cam: gateway<br/>Ô trắng: kết quả, node tắt"]
 
-    %% ===== Luồng 1 (link 0-6) =====
+    %% ===== Luồng 1 (link 0-4) =====
     A1 -->|"SMB2/3"| A2
-    A2 --- A3
-    A3 --> A4
-    A4 -->|"PUT S3 (SigV4)"| A5
-    A5 -->|"cập nhật index"| A6
-    A5 -->|"ghi data (librados)"| A7
-    A7 -->|"gửi 2 mảnh"| A8
+    A2 -->|"1. mở/tạo file<br/>(libcephfs)"| A3
+    A3 -->|"ghi metadata"| A4
+    A2 -->|"2. ghi dữ liệu<br/>thẳng tới OSD"| A5
+    A5 -->|"gửi 2 bản sao"| A6
 
-    %% ===== Luồng 2 (link 7-11) =====
+    %% ===== Luồng 2 (link 5-9) =====
     B1 --> B2
     B2 -->|"sai"| B3
     B2 -->|"đúng"| B4
     B4 -->|"không có quyền"| B5
     B4 -->|"có quyền"| B6
 
-    %% ===== Luồng 3 (link 12-16) =====
+    %% ===== Luồng 3 (link 10-14) =====
     C1 -->|"GET (SigV4)"| C2
     C2 -->|"librados"| C3
     C3 -->|"xin mảnh"| C4
     C3 --x|"bỏ qua (down)"| C5
     C3 -->|"dữ liệu đủ<br/>qua RGW"| C6
 
-    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 stroke:#37474F,stroke-width:2px
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 stroke:#37474F,stroke-width:2px
 
     class A1,B1,C1,C6 client
-    class A2,A4 truenas
-    class A5,A6,A7,A8,B2,B4,C2,C3,C4 ceph
-    class A3,B3,B5,B6,C5,LEG note
+    class A2,B2,B4,C2 gateway
+    class A3,A4,A5,A6,C3,C4 ceph
+    class B3,B5,B6,C5,LEG note
     style L1 fill:#FAFAFA,stroke:#212121,stroke-width:2px,color:#1B1B1B
     style L2 fill:#FAFAFA,stroke:#212121,stroke-width:2px,color:#1B1B1B
     style L3 fill:#FAFAFA,stroke:#212121,stroke-width:2px,color:#1B1B1B

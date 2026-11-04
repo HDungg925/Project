@@ -1,74 +1,72 @@
 ---
 title: "Application Architecture · Gồm phần mềm nào, nói chuyện qua giao diện nào"
+config:
+  layout: dagre
+  theme: base
+  themeVariables: {"fontSize": "32px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F", "edgeLabelBackground": "#FFFFFF"}
+  themeCSS: ".flowchartTitleText { font-size: 42px; font-weight: bold; } .edgeLabel div { max-width: none !important; white-space: nowrap !important; }"
+  flowchart: {"curve": "basis", "wrappingWidth": 1600, "nodeSpacing": 30, "rankSpacing": 60, "padding": 10, "subGraphTitleMargin": {"top": 6, "bottom": 26}}
 ---
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "32px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F", "edgeLabelBackground": "#FFFFFF"}, "themeCSS": ".flowchartTitleText { font-size: 42px; font-weight: bold; } .edgeLabel div { max-width: none !important; white-space: nowrap !important; }", "flowchart": {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 20, "rankSpacing": 50, "padding": 10, "subGraphTitleMargin": {"top": 6, "bottom": 26}}}}%%
 flowchart TB
-    %% ===== BẢNG MÀU CHUNG (giữ nguyên như slide 6) =====
+    %% ===== BẢNG MÀU CHUNG v3 (giữ nguyên như slide 6) =====
     classDef client  fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B1B1B
-    classDef truenas fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
+    classDef gateway fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
     classDef ceph    fill:#DCEBFA,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
     classDef infra   fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1B1B1B
     classDef should  fill:#F5F5F5,stroke:#616161,stroke-width:2px,stroke-dasharray:6 4,color:#424242
     classDef note    fill:#FFFFFF,stroke:#212121,stroke-width:1px,color:#1B1B1B
 
-    %% ===== CLIENT =====
-    subgraph CLI["Client"]
-        C_SMB["smbclient"]
-        C_WEB["Trình duyệt (quản trị)"]
-        subgraph S3CLI["Client S3"]
-            C_AWS["aws cli"]
-            C_RCL["rclone"]
-            C_PY["boto3 / curl"]
-        end
+    %% Bố cục 04/11 (theo góp ý: bớt rối, đường thẳng, lõi Ceph sát 2 tầng trên, chú thích nằm ngang ở dưới):
+    %% - 3 khung KHÔNG ghi tiêu đề là CỐ Ý: tiêu đề khung nằm giữa, bị đường RBD và S3 chạy đè lên.
+    %%   Nghĩa của từng khung ghi ở dòng đầu chú thích.
+    %% - Thứ tự khai báo client (trái → phải) là CỐ Ý: mỗi client đứng gần ngay trên đích của nó.
+    %% - Không vẽ MDS → RADOS và MGR → RADOS (thêm 1 tầng, làm lõi Ceph xa ra); ghi trong T5.2.
+
+    %% ===== TẦNG 1: CLIENT (khung xanh lá) =====
+    subgraph CLI[" "]
+        C_WEB["Trình duyệt<br/>(dashboard)"]
         C_ADM["ceph CLI<br/>radosgw-admin"]
+        C_RBD["rbd + krbd<br/>(ổ /dev/rbd0)"]
+        C_S3["Client S3<br/>aws cli · rclone · boto3/curl"]
+        C_SMB["smbclient"]
     end
 
-    %% ===== CEPH =====
-    subgraph CEPH["Ceph"]
-        R_RGW["RGW (RADOS Gateway)<br/>S3 API + IAM API"]
-        subgraph MGR["MGR (manager)"]
-            M_DASH["module dashboard"]
-            M_ORCH["module cephadm"]
-        end
-        subgraph RADOS["RADOS (cụm lưu trữ lõi)"]
-            D_MON["MON · giữ bản đồ cụm"]
-            D_OSD["OSD · lưu dữ liệu"]
-        end
+    %% ===== TẦNG 2: GATEWAY, dịch giao thức (khung cam) =====
+    subgraph GW[" "]
+        G_SMB["Samba (module smb)<br/>SMB → CephFS"]
+        G_RGW["RGW (RADOS Gateway)<br/>S3 API + IAM API"]
     end
 
-    %% ===== TRUENAS =====
-    subgraph TN["TrueNAS"]
-        T_UI["Web UI"]
-        T_SMB["Samba (dịch vụ SMB)"]
-        T_CS["Cloud Sync (rclone)"]
-        T_ZFS["ZFS (pool, dataset)"]
+    %% ===== TẦNG 3: LÕI CEPH (khung xanh dương) =====
+    subgraph CEPH[" "]
+        D_MDS["MDS<br/>mục lục CephFS"]
+        D_MON["RADOS · MON<br/>giữ bản đồ cụm"]
+        D_OSD["RADOS · OSD<br/>lưu dữ liệu"]
+        M_MGR["MGR (manager)<br/>dashboard · module smb · cephadm"]
     end
 
-    LEG["CHÚ THÍCH<br/>Mũi tên: bên gọi → bên được gọi<br/>Chữ trên mũi tên: giao diện<br/>Khung lồng: nằm bên trong<br/>Nét đứt xám: Should"]
+    LEG["CHÚ THÍCH · Khung xanh lá: client · Khung cam: gateway (dịch giao thức) · Khung xanh dương: lõi Ceph<br/>Mũi tên: bên gọi → bên được gọi · Chữ trên mũi tên: giao diện · Nét đứt xám: Should<br/>Block (RBD) không qua gateway · RADOS = MON + OSD<br/>librados: hỏi MON lấy bản đồ cụm, rồi đọc/ghi thẳng OSD"]
 
     %% ===== GIAO DIỆN (thứ tự dòng = số trong linkStyle) =====
-    C_SMB -->|"SMB2/3"| T_SMB
-    C_WEB -->|"Web UI<br/>(HTTP/S)"| T_UI
-    T_SMB -->|"đọc/ghi file"| T_ZFS
-    T_CS -->|"đọc/ghi file"| T_ZFS
-    T_CS -->|"S3 REST/HTTP<br/>(SigV4)"| R_RGW
-    S3CLI -->|"S3 REST/HTTP<br/>(SigV4)"| R_RGW
-    C_AWS -.->|"IAM API<br/>(Should)"| R_RGW
-    C_WEB -->|"Web UI<br/>(HTTPS)"| M_DASH
-    R_RGW -->|"librados"| RADOS
-    C_ADM -->|"librados"| RADOS
-    MGR -->|"librados"| RADOS
+    C_SMB -->|"SMB2/3"| G_SMB
+    C_S3 -->|"S3 REST<br/>(SigV4)"| G_RGW
+    C_S3 -.->|"IAM API<br/>(Should)"| G_RGW
+    G_SMB -->|"libcephfs<br/>metadata"| D_MDS
+    G_SMB -->|"libcephfs<br/>dữ liệu"| D_OSD
+    C_RBD -->|"RBD (krbd)"| D_OSD
+    G_RGW -->|"librados"| D_OSD
+    C_ADM -->|"librados"| D_MON
+    C_WEB -->|"HTTPS"| M_MGR
+    %% Liên kết ẩn: chỉ để đặt chú thích xuống dưới khung lõi Ceph
+    CEPH ~~~ LEG
 
-    linkStyle 0,1,2,3,4,5,7,8,9,10 stroke:#37474F,stroke-width:2px
-    linkStyle 6 stroke:#616161,stroke-width:2px,stroke-dasharray:6 4
+    linkStyle 0,1,3,4,5,6,7,8 stroke:#37474F,stroke-width:2px
+    linkStyle 2 stroke:#616161,stroke-width:2px,stroke-dasharray:6 4
 
-    class C_SMB,C_AWS,C_RCL,C_PY,C_WEB,C_ADM client
-    class T_UI,T_SMB,T_CS,T_ZFS truenas
-    class R_RGW,M_DASH,M_ORCH,D_MON,D_OSD ceph
+    class C_SMB,C_RBD,C_S3,C_WEB,C_ADM client
+    class G_SMB,G_RGW gateway
+    class M_MGR,D_MDS,D_MON,D_OSD ceph
     class LEG note
     style CLI fill:#FAFAFA,stroke:#2E7D32,stroke-width:2px,color:#1B1B1B
-    style S3CLI fill:#FFFFFF,stroke:#2E7D32,stroke-width:1px,color:#1B1B1B
-    style TN fill:#FFF8F0,stroke:#E65100,stroke-width:2px,color:#1B1B1B
+    style GW fill:#FFF8F0,stroke:#E65100,stroke-width:2px,color:#1B1B1B
     style CEPH fill:#F4F8FD,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
-    style MGR fill:#FFFFFF,stroke:#1565C0,stroke-width:1px,color:#1B1B1B
-    style RADOS fill:#FFFFFF,stroke:#1565C0,stroke-width:1px,color:#1B1B1B

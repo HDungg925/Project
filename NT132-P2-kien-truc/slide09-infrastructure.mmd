@@ -1,46 +1,53 @@
 ---
 title: "Infrastructure Architecture · Chạy trên máy nào, mạng nào"
+config:
+  layout: dagre
+  theme: base
+  themeVariables: {"fontSize": "32px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F", "edgeLabelBackground": "#FFFFFF"}
+  themeCSS: ".flowchartTitleText { font-size: 42px; font-weight: bold; } .edgeLabel div { max-width: none !important; white-space: nowrap !important; }"
+  flowchart: {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 20, "rankSpacing": 50, "padding": 10, "subGraphTitleMargin": {"top": 6, "bottom": 26}}
 ---
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "32px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F", "edgeLabelBackground": "#FFFFFF"}, "themeCSS": ".flowchartTitleText { font-size: 42px; font-weight: bold; } .edgeLabel div { max-width: none !important; white-space: nowrap !important; }", "flowchart": {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 20, "rankSpacing": 50, "padding": 10, "subGraphTitleMargin": {"top": 6, "bottom": 26}}}}%%
 flowchart TB
-    %% ===== BẢNG MÀU CHUNG (giữ nguyên như slide 6-8) =====
+    %% ===== BẢNG MÀU CHUNG v3 (giữ nguyên như slide 6-8) =====
     classDef client  fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B1B1B
-    classDef truenas fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
+    classDef gateway fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
     classDef ceph    fill:#DCEBFA,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
     classDef infra   fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1B1B1B
     classDef should  fill:#F5F5F5,stroke:#616161,stroke-width:2px,stroke-dasharray:6 4,color:#424242
     classDef note    fill:#FFFFFF,stroke:#212121,stroke-width:1px,color:#1B1B1B
+    %% Riêng slide 9-10: node Ceph chỉ tham gia cụm ở UC5 (ceph4) = nền xanh, viền đứt
+    classDef later   fill:#DCEBFA,stroke:#1565C0,stroke-width:2px,stroke-dasharray:6 4,color:#1B1B1B
 
     INET["Internet<br/>chỉ dùng lúc cài"]
 
-    subgraph LAP["LAP-24 · Acer Nitro 5 · i5 (đời: chưa chốt) · RAM 24 GB · SSD"]
-        HOST["Host Kali Linux + KVM/libvirt<br/>RAM còn lại dưới 6.5 GB"]
-        DATA[("Phân vùng /data 100 GB<br/>ext4 [cần kiểm]<br/>VM cấp tổng 145 GB")]
+    subgraph LAP["LAP-24 · Acer Nitro 5 · i5-12450H (12 luồng) · RAM 24 GB · SSD NVMe"]
+        HOST["Host Kali Linux + KVM/libvirt<br/>RAM còn lại khoảng 7 GiB"]
+        DATA[("Phân vùng /data 98 GB<br/>ext4, có trong fstab<br/>VM cấp tổng 140 GB")]
         NET["virbr0 · NAT 192.168.122.0/24<br/>gateway .1 · IP cố định theo MAC"]
-        VM_TN["truenas · .10<br/>6 GB · 2 vCPU<br/>đĩa 20 + 2×10 GB"]
-        VM_C1["ceph1 · .11<br/>4.5 GB · 2 vCPU<br/>đĩa 20 + 15 GB"]
-        VM_C2["ceph2 · .12<br/>3.5 GB · 2 vCPU<br/>đĩa 20 + 15 GB"]
+        VM_C1["ceph1 · .11<br/>5 GB · 2 vCPU<br/>đĩa 20 + 15 GB"]
+        VM_C2["ceph2 · .12<br/>4.5 GB · 2 vCPU<br/>đĩa 20 + 15 GB"]
         VM_C3["ceph3 · .13<br/>3.5 GB · 2 vCPU<br/>đĩa 20 + 15 GB"]
+        VM_C4["ceph4 · .14<br/>3 GB · 2 vCPU<br/>đĩa 20 + 15 GB<br/>(thêm ở UC5)"]
     end
 
-    LEG["CHÚ THÍCH<br/>Đường nối: kết nối mạng<br/>Số trên đường: port VM mở<br/>Nét đứt xám: không dùng khi demo<br/>Tím: phần cứng, host, mạng<br/>Cam: VM TrueNAS · Xanh: VM Ceph<br/>RAM, vCPU VM: đề xuất, chờ đo"]
+    LEG["CHÚ THÍCH<br/>Đường nối: kết nối mạng<br/>Số trên đường: port VM mở<br/>Nét đứt xám: không dùng khi demo<br/>Viền đứt xanh: node thêm ở UC5<br/>Tím: phần cứng, host, mạng<br/>Xanh: VM Ceph<br/>RAM, vCPU VM: đề xuất, chờ đo"]
 
     %% ===== KẾT NỐI (thứ tự dòng = số trong linkStyle) =====
     %% Viết "HOST --- INET" (không phải INET --- HOST) để Internet nằm cạnh laptop, ảnh không bị cao
     HOST ---|"NAT qua host"| INET
     HOST ---|"ổ đĩa ảo<br/>(cấp phát mỏng)"| DATA
     HOST ---|"là .1"| NET
-    NET ---|"445 SMB<br/>80/443 Web UI"| VM_TN
     NET ---|"80 S3 · 8443 dashboard<br/>MON 3300, 6789<br/>OSD 6800–7300"| VM_C1
-    NET ---|"MON 3300, 6789<br/>OSD 6800–7300"| VM_C2
+    NET ---|"445 SMB<br/>MON 3300, 6789<br/>OSD 6800–7300"| VM_C2
     NET ---|"MON 3300, 6789<br/>OSD 6800–7300"| VM_C3
+    NET ---|"OSD 6800–7300"| VM_C4
 
     linkStyle 0 stroke:#616161,stroke-width:2px,stroke-dasharray:6 4
     linkStyle 1,2,3,4,5,6 stroke:#37474F,stroke-width:2px
 
     class INET should
     class HOST,DATA,NET infra
-    class VM_TN truenas
     class VM_C1,VM_C2,VM_C3 ceph
+    class VM_C4 later
     class LEG note
     style LAP fill:#FAFAFA,stroke:#4527A0,stroke-width:3px,color:#1B1B1B

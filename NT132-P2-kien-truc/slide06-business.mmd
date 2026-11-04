@@ -1,11 +1,17 @@
 ---
 title: "Business Architecture · Nền tảng phục vụ ai, làm được gì"
+config:
+  layout: dagre
+  theme: base
+  themeVariables: {"fontSize": "24px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F"}
+  themeCSS: ".flowchartTitleText { font-size: 34px; font-weight: bold; }"
+  flowchart: {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 30, "rankSpacing": 80, "padding": 16, "subGraphTitleMargin": {"top": 6, "bottom": 18}}
 ---
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "24px", "fontFamily": "Arial, Helvetica, sans-serif", "lineColor": "#37474F"}, "themeCSS": ".flowchartTitleText { font-size: 34px; font-weight: bold; }", "flowchart": {"curve": "basis", "wrappingWidth": 650, "nodeSpacing": 30, "rankSpacing": 80, "padding": 16, "subGraphTitleMargin": {"top": 6, "bottom": 18}}}}%%
 flowchart LR
-    %% ===== BẢNG MÀU CHUNG (dùng lại nguyên khối này cho slide 7-10) =====
+    %% ===== BẢNG MÀU CHUNG v3 (dùng lại nguyên khối này cho slide 7-10) =====
+    %% gateway (cam) = thành phần dịch giao thức client sang Ceph (RGW, Samba); thay cho màu TrueNAS cũ
     classDef client  fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B1B1B
-    classDef truenas fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
+    classDef gateway fill:#FFE0B2,stroke:#E65100,stroke-width:2px,color:#1B1B1B
     classDef ceph    fill:#DCEBFA,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
     classDef infra   fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1B1B1B
     classDef should  fill:#F5F5F5,stroke:#616161,stroke-width:2px,stroke-dasharray:6 4,color:#424242
@@ -13,37 +19,40 @@ flowchart LR
 
     %% ===== Tác nhân bên trái =====
     ACT_OFF["Người dùng văn phòng<br/>(thư mục chia sẻ)"]
+    ACT_SRV["Máy chủ cần ổ đĩa<br/>(gắn ổ qua mạng)"]
     ACT_APP["Ứng dụng / lập trình viên<br/>(gọi S3 API)"]
 
     %% ===== Ranh giới hệ thống =====
-    subgraph PLATFORM["Nền tảng lưu trữ (TrueNAS + Ceph)"]
-        UC1(["UC1 · File SMB ↔ Object S3<br/>CAP3 Sao lưu file ↔ object · B1 B2"])
-        UC2(["UC2 · Truy cập S3 nhiều client<br/>CAP2 Lưu object qua S3 · B2"])
-        UC3(["UC3 · Phân quyền IAM<br/>CAP4 Danh tính, phân quyền · B3"])
-        UC4(["UC4 · Chịu lỗi bằng Erasure Coding<br/>CAP5 Bảo vệ dữ liệu · B1"])
-        UC5(["UC5 · Ngưỡng và giới hạn<br/>CAP6 Kiểm soát dung lượng, lưu lượng · B3"])
+    subgraph PLATFORM["Nền tảng lưu trữ (một cụm Ceph)"]
+        UC1(["UC1 · Chia sẻ file qua SMB<br/>CAP1 Lưu, chia sẻ file · B2"])
+        UC2(["UC2 · Cấp ổ đĩa khối<br/>CAP2 Ổ đĩa khối · B2"])
+        UC3(["UC3 · Truy cập S3 nhiều client<br/>CAP3 Lưu object qua S3 · B2"])
+        UC4(["UC4 · Phân quyền IAM<br/>CAP4 Danh tính, phân quyền · B3"])
+        UC5(["UC5 · Chịu lỗi EC, thêm node<br/>CAP5 Bảo vệ dữ liệu · CAP6 Mở rộng · B1 B2"])
+        UC6(["UC6 · Ngưỡng và giới hạn<br/>CAP7 Kiểm soát dung lượng, lưu lượng · B3"])
     end
 
     %% ===== Tác nhân bên phải và chú thích =====
     ACT_ADM["Quản trị viên lưu trữ"]
-    LEG["CHÚ THÍCH<br/>B1 Chống mất dữ liệu<br/>B2 Không phụ thuộc nhà cung cấp<br/>B3 Kiểm soát truy cập, tài nguyên<br/>──────────<br/>Ô bo tròn = use case<br/>Ô xanh lá = tác nhân bên ngoài<br/>Đường nối = tác nhân dùng UC<br/>Cam = TrueNAS làm chính<br/>Xanh dương = Ceph làm chính"]
+    LEG["CHÚ THÍCH<br/>B1 Chống mất dữ liệu<br/>B2 Một nền tảng mở, lớn dần<br/>B3 Kiểm soát truy cập, tài nguyên<br/>──────────<br/>Ô bo tròn = use case<br/>Ô xanh lá = tác nhân bên ngoài<br/>Đường nối = tác nhân dùng UC<br/>Mọi UC do một cụm Ceph phục vụ"]
 
     %% ===== Liên kết tác nhân - use case (đường thẳng, không mũi tên) =====
     ACT_OFF --- UC1
-    ACT_APP --- UC2
+    ACT_SRV --- UC2
     ACT_APP --- UC3
-    ACT_APP --- UC5
+    ACT_APP --- UC4
+    ACT_APP --- UC6
     UC1 --- ACT_ADM
-    UC3 --- ACT_ADM
+    UC2 --- ACT_ADM
     UC4 --- ACT_ADM
     UC5 --- ACT_ADM
-    %% Hai liên kết ẩn dưới đây chỉ để giữ bố cục (UC4 đúng thứ tự, chú thích nằm bên phải)
-    ACT_APP ~~~ UC4
-    UC5 ~~~ LEG
+    UC6 --- ACT_ADM
+    %% Liên kết ẩn chỉ để giữ bố cục (UC5 đúng thứ tự, chú thích nằm bên phải)
+    ACT_APP ~~~ UC5
+    ACT_ADM ~~~ LEG
 
-    linkStyle 0,1,2,3,4,5,6,7 stroke:#37474F,stroke-width:2px
-    class ACT_OFF,ACT_APP,ACT_ADM client
-    class UC1 truenas
-    class UC2,UC3,UC4,UC5 ceph
+    linkStyle 0,1,2,3,4,5,6,7,8,9 stroke:#37474F,stroke-width:2px
+    class ACT_OFF,ACT_SRV,ACT_APP,ACT_ADM client
+    class UC1,UC2,UC3,UC4,UC5,UC6 ceph
     class LEG note
     style PLATFORM fill:#FAFAFA,stroke:#212121,stroke-width:2px,color:#1B1B1B
